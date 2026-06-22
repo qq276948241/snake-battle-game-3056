@@ -66,7 +66,12 @@ class Snake:
     def is_boosted(self, now=None):
         if now is None:
             now = time.time()
-        return self.boost_end is not None and now < self.boost_end
+        if self.boost_end is None:
+            return False
+        if now >= self.boost_end:
+            self.boost_end = None
+            return False
+        return True
 
     def activate_boost(self):
         self.boost_end = time.time() + BOOST_DURATION_SEC
@@ -74,9 +79,9 @@ class Snake:
     def boost_remaining(self, now=None):
         if now is None:
             now = time.time()
-        if self.boost_end and now < self.boost_end:
-            return self.boost_end - now
-        return 0
+        if not self.is_boosted(now):
+            return 0
+        return self.boost_end - now
 
     def occupied_set(self):
         return set(self.body)
@@ -266,7 +271,16 @@ class Game:
             return max(20, BASE_TICK_MS // BOOST_SPEED_MULTIPLIER)
         return BASE_TICK_MS
 
-    def _check_collisions(self, new_heads):
+    def _compute_next_bodies(self, new_heads, grows):
+        next_bodies = []
+        for snake, head, grow in zip(self.snakes, new_heads, grows):
+            body = [head] + list(snake.body)
+            if not grow:
+                body.pop()
+            next_bodies.append(body)
+        return next_bodies
+
+    def _check_collisions(self, new_heads, next_bodies):
         dead = [False, False]
 
         for i, (snake, head) in enumerate(zip(self.snakes, new_heads)):
@@ -280,25 +294,20 @@ class Game:
         for i, (snake, head) in enumerate(zip(self.snakes, new_heads)):
             if dead[i]:
                 continue
-            if snake.hits_self(head):
+            if head in snake.body[1:]:
                 dead[i] = True
 
-        for i, (snake, head) in enumerate(zip(self.snakes, new_heads)):
+        for i in range(len(self.snakes)):
             if dead[i]:
                 continue
-            j = 1 - i
-            other = self.snakes[j]
-            other_grow = (self.food is not None and new_heads[j] == self.food)
-            if not dead[j]:
-                temp_other = list(other.body)
-                temp_other.insert(0, new_heads[j])
-                if not other_grow:
-                    temp_other.pop()
-                if head in temp_other:
+            head = new_heads[i]
+            for j in range(len(self.snakes)):
+                if i == j:
+                    continue
+                other_body = next_bodies[j] if not dead[j] else self.snakes[j].body
+                if head in other_body:
                     dead[i] = True
-            else:
-                if head in other.body:
-                    dead[i] = True
+                    break
 
         return dead
 
@@ -324,8 +333,6 @@ class Game:
             self.p2.activate_boost()
             self.boost = None
             self.last_boost_spawn = time.time()
-
-        return p1_grow, p2_grow
 
     def _build_winner_msg(self, dead):
         score_info = "Final Score - {}: {} | {}: {}".format(
@@ -370,7 +377,12 @@ class Game:
 
                 new_heads = [s.next_head() for s in self.snakes]
 
-                dead = self._check_collisions(new_heads)
+                grows = [
+                    self.food is not None and new_heads[0] == self.food,
+                    self.food is not None and new_heads[1] == self.food,
+                ]
+                next_bodies = self._compute_next_bodies(new_heads, grows)
+                dead = self._check_collisions(new_heads, next_bodies)
 
                 if any(dead):
                     self.winner = self._build_winner_msg(dead)
@@ -380,10 +392,10 @@ class Game:
                         self.game_over, self.winner)
                     continue
 
-                p1_grow, p2_grow = self._apply_pickups(new_heads)
+                self._apply_pickups(new_heads)
 
-                self.p1.move(p1_grow)
-                self.p2.move(p2_grow)
+                self.p1.move(grows[0])
+                self.p2.move(grows[1])
 
 
 if __name__ == '__main__':
