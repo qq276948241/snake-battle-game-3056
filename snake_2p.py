@@ -49,8 +49,8 @@ def init_snakes():
 def spawn_food(p1_snake, p2_snake):
     occupied = set(p1_snake) | set(p2_snake)
     empty = []
-    for x in range(1, MAP_WIDTH):
-        for y in range(1, MAP_HEIGHT):
+    for x in range(1, MAP_WIDTH + 1):
+        for y in range(1, MAP_HEIGHT + 1):
             if (x, y) not in occupied:
                 empty.append((x, y))
     if not empty:
@@ -103,11 +103,21 @@ def draw_map(stdscr, p1_snake, p2_snake, food, p1_score, p2_score, game_over, wi
         pass
 
     if game_over:
-        msg_y = MAP_HEIGHT // 2
-        msg_x = (MAP_WIDTH - len(winner)) // 2
         try:
-            stdscr.addstr(msg_y, max(0, msg_x), winner)
-            stdscr.addstr(msg_y + 2, 0, "Press 'r' to restart or 'q' to quit")
+            result_lines = winner.split(" Final Score - ")
+            result_line = result_lines[0]
+            score_line = "Final Score - " + result_lines[1] if len(result_lines) > 1 else ""
+            
+            msg_y = MAP_HEIGHT // 2 - 1
+            if score_line:
+                stdscr.addstr(msg_y, max(0, (MAP_WIDTH + 2 - len(result_line)) // 2), result_line)
+                stdscr.addstr(msg_y + 1, max(0, (MAP_WIDTH + 2 - len(score_line)) // 2), score_line)
+                hint = "Press 'r' to restart or 'q' to quit"
+                stdscr.addstr(msg_y + 3, max(0, (MAP_WIDTH + 2 - len(hint)) // 2), hint)
+            else:
+                stdscr.addstr(msg_y, max(0, (MAP_WIDTH + 2 - len(winner)) // 2), winner)
+                hint = "Press 'r' to restart or 'q' to quit"
+                stdscr.addstr(msg_y + 2, max(0, (MAP_WIDTH + 2 - len(hint)) // 2), hint)
         except curses.error:
             pass
 
@@ -116,7 +126,7 @@ def draw_map(stdscr, p1_snake, p2_snake, food, p1_score, p2_score, game_over, wi
 
 def check_wall_collision(head):
     x, y = head
-    return x < 1 or x >= MAP_WIDTH or y < 1 or y >= MAP_HEIGHT
+    return x < 1 or x > MAP_WIDTH or y < 1 or y > MAP_HEIGHT
 
 
 def check_snake_collision(head, snake, exclude_head=False):
@@ -217,12 +227,13 @@ def main(stdscr):
                     p2_dead = True
 
             if p1_dead or p2_dead:
+                score_info = "Final Score - P1: {} | P2: {}".format(p1_score, p2_score)
                 if p1_dead and p2_dead:
-                    winner = "DRAW! Both died!"
+                    winner = "DRAW! Both died! " + score_info
                 elif p1_dead:
-                    winner = "P2 WINS!"
+                    winner = "P2 WINS! " + score_info
                 else:
-                    winner = "P1 WINS!"
+                    winner = "P1 WINS! " + score_info
                 game_over = True
                 draw_map(stdscr, p1_snake, p2_snake, food, p1_score, p2_score, game_over, winner)
                 continue
